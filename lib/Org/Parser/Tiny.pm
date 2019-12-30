@@ -239,16 +239,16 @@ Select document nodes using L<Data::CSel>:
      "Headline[title =~ /foo/]"
  );
 
-Manipulate tree nodes with path-like semantic using L<Tree::FSLike>:
+Manipulate tree nodes with path-like semantic using L<Tree::FSMethods>:
 
- use Tree::FSLike;
- my $fs = Tree::FSLike->new(
+ use Tree::FSMethods;
+ my $fs = Tree::FSMethods->new(
      tree => $doc,
      gen_filename_method => sub { $_[0]->can("title") ? $_[0]->title : "$_[0]" },
  );
 
  # list nodes right above the root node
- my @nodes = $fs->ls;
+ my @nodes = $fs->ls("/");
 
  # use wildcard to list nodes
  my @nodes = $fs->ls("*foo*");
@@ -262,7 +262,7 @@ Manipulate tree nodes with path-like semantic using L<Tree::FSLike>:
 This module is a more lightweight alternative to L<Org:Parser>. Currently it is
 very simple and only parses headlines; thus it is several times faster than
 Org::Parser. I use this to write utilities like L<sort-org-headlines-tiny> or to
-use it with L<Tree::FSLike>.
+use it with L<Tree::FSMethods>.
 
 
 =head1 ATTRIBUTES
@@ -292,7 +292,7 @@ Returns a tree of node objects (of class C<Org::Parser::Tiny::Node> and its
 subclasses C<Org::Parser::Tiny::Node::Document> and
 C<Org::Parser::Tiny::Node::Headline>). The tree node complies to
 L<Role::TinyCommons::Tree::Node> role, so these tools are available:
-L<Data::CSel>, L<Tree::Dump>, L<Tree::FSLike>, etc.
+L<Data::CSel>, L<Tree::Dump>, L<Tree::FSMethods>, etc.
 
 Will die if there are syntax errors in documents.
 
