@@ -1,3 +1,5 @@
+## no critic: Modules::RequireExplicitPackage
+
 use 5.010001;
 use strict;
 use warnings;
