@@ -17,33 +17,96 @@ sub new {
 sub _parse {
     my ($self, $lines, $opts) = @_;
 
-    my @res;
-    my $curlines = [];
+    # stage 1: get todo keywords
 
-    # gather text before the first heading
-    while (1) {
-        last unless @$lines;
-        last if $lines->[0] =~ /^\*+ /;
-        push @$curlines, shift(@$lines);
+    my @undone_keywords;
+    my @done_keywords;
+    my $linenum = 0;
+    while ($linenum < @$lines) {
+        my $line = $lines->[$linenum];
+        $linenum++;
+        if ($line =~ s/^#\+TODO:\s*//) {
+            my ($undone_keywords, $done_keywords) =
+                $line =~ /^\s*(.*?)\s*\|\s*(.*?)\s*$/
+                or die "Line $linenum: Invalid #+TODO: please use ... | ...";
+            while ($undone_keywords =~ /(\w+)/g) {
+                push @undone_keywords, $1;
+            }
+            while ($done_keywords =~ /(\w+)/g) {
+                push @done_keywords, $1;
+            }
+        }
     }
-    push @res, Org::Parser::Tiny::Node::Head->new(
-        {type=>'text', content=>join("",@$curlines)} if @$curlines;
+    @undone_keywords = ("TODO") unless @undone_keywords;
+    @done_keywords   = ("DONE") unless @done_keywords;
+    my $undone_re = join("|", @undone_keywords); $undone_re= qr/(?:$undone_re)/;
+    my $done_re   = join("|", @done_keywords  ); $done_re  = qr/(?:$done_re)/;
 
-    # gather headlines + their content
+    # stage 2: build nodes
 
-    my $is_hl;
-    for my $line (@$lines) {
-        if ($line =~ /^(\*+) /) {
-            $is_hl = 1;
+    # a linear list of nodes
+    my @nodes = (
+        Org::Parser::Tiny::Node::Document->new(),
+    );
+
+    $linenum = 0;
+    while ($linenum < @$lines) {
+        my $line = $lines->[$linenum];
+        $linenum++;
+        if ($line =~ /^(\*+) (.*)/) {
+            #say "D: got headline $line";
             my $level = length($1);
-            push @res, {type=>'headline', headline=>$line, level=>$level,
-                        content=>""};
+            my $title = $2;
+            my $node = Org::Parser::Tiny::Node::Headline->new(
+                raw   => $line,
+                level => $level,
+            );
+
+            # extract todo state
+            if ($title =~ s/\s*($undone_re)\s+//) {
+                $node->{is_todo} = 1;
+                $node->{is_done} = 0;
+                $node->{todo_state} = $1;
+            } elsif ($title =~ s/\s*($done_re)\s+//) {
+                $node->{is_todo} = 1;
+                $node->{is_done} = 1;
+                $node->{todo_state} = $1;
+            } else {
+                $node->{is_todo} = 0;
+                $node->{is_done} = 0;
+                $node->{todo_state} = "";
+            }
+
+            # extract tags
+            if ($title =~ s/\s+:((?:\w+:)+)$//) {
+                my $tags = $1;
+                my @tags;
+                while ($tags =~ /(\w+)/g) {
+                    push @tags, $1;
+                }
+                $node->{tags} = \@tags;
+            }
+
+            $node->{title} = $title;
+
+            # find the first node which has the lower level (or the root node)
+            # as the parent node
+            my $i = $#nodes;
+            while ($i >= 0) {
+                if ($i == 0 || $nodes[$i]{level} < $level) {
+                    $node->{parent} = $nodes[$i];
+                    push @{ $nodes[$i]{children} }, $node;
+                    last;
+                }
+                $i--;
+            }
+            push @nodes, $node;
         } else {
-            $res[-1]{content} .= $line;
+            $nodes[-1]{preamble} .= $line;
         }
     }
 
-    \@res;
+    $nodes[0];
 }
 
 sub parse {
@@ -93,6 +156,7 @@ package Org::Parser::Tiny::Node;
 
 sub new {
     my ($class, %args) = @_;
+    $args{children} //= [];
     bless \%args, $class;
 }
 
@@ -130,7 +194,7 @@ our @ISA = qw(Org::Parser::Tiny::Node::HasPreamble);
 
 sub level { $_[0]{level} }
 
-sub tree { $_[0]{tree} }
+sub title { $_[0]{title} }
 
 sub is_todo { $_[0]{is_todo} }
 
@@ -194,8 +258,9 @@ Manipulate tree nodes with path-like semantic using L<Tree::FSLike>:
 =head1 DESCRIPTION
 
 This module is a more lightweight alternative to L<Org:Parser>. Currently it is
-very simple and only parses headlines. I use this to write utilities like
-L<sort-org-headlines-tiny>.
+very simple and only parses headlines; thus it is several times faster than
+Org::Parser. I use this to write utilities like L<sort-org-headlines-tiny> or to
+use it with L<Tree::FSLike>.
 
 
 =head1 ATTRIBUTES
@@ -246,6 +311,92 @@ Just like L</parse>, but will load document from file instead.
 Known options (aside from those known by parse()):
 
 =over
+
+=back
+
+
+=head1 NODE CLASSES
+
+=head2 Org::Parser::Tiny::Node
+
+Base class.
+
+Methods:
+
+=over
+
+=item * parent
+
+=item * children
+
+=item * as_string
+
+=back
+
+=head2 Org::Parser::Tiny::Node::Document
+
+Root node.
+
+Methods:
+
+=over
+
+=back
+
+=head2 Org::Parser::Tiny::Node::Headline
+
+Root node.
+
+Methods:
+
+=over
+
+=item * level
+
+Integer.
+
+=item * title
+
+Str.
+
+=item * is_todo
+
+Whether headline has a done or undone todo state. For example, the following
+headlines will have their is_todo() return true:
+
+ * TODO foo
+ * DONE bar
+
+=item * is_done
+
+Whether headline has a done todo state. For example, the following
+headlines will have their is_done() return true:
+
+ * DONE bar
+
+=item * todo_state
+
+Todo state or empty string. For example, this headline:
+
+ * TODO foo
+
+will have "TODO" as the todo_state, while:
+
+ * foo
+
+will have "".
+
+=item * tags
+
+Array of strings. For example, this headline:
+
+ * foo    :tag1:tag2:
+
+will have its C<tags()> return C<< ["tag1","tag2"] >>, while this headline:
+
+ * foo
+
+will have its C<tags()> return C<< [] >>.
 
 =back
 
