@@ -1,9 +1,14 @@
-package Org::Parser::Tiny;
+## no critic: Modules::RequireExplicitPackage
 
 use 5.010001;
 use strict;
 use warnings;
 
+package Org::Parser::Tiny;
+
+# AUTHORITY
+# DATE
+# DIST
 # VERSION
 
 sub new {
@@ -14,39 +19,103 @@ sub new {
 sub _parse {
     my ($self, $lines, $opts) = @_;
 
-    my @res;
-    my $curlines = [];
+    # stage 1: get todo keywords
 
-    # gather text before the first heading
-    while (1) {
-        last unless @$lines;
-        last if $lines->[0] =~ /^\*+ /;
-        push @$curlines, shift(@$lines);
+    my @undone_keywords;
+    my @done_keywords;
+    my $linenum = 0;
+    while ($linenum < @$lines) {
+        my $line = $lines->[$linenum];
+        $linenum++;
+        if ($line =~ s/^#\+TODO:\s*//) {
+            my ($undone_keywords, $done_keywords) =
+                $line =~ /^\s*(.*?)\s*\|\s*(.*?)\s*$/
+                or die "Line $linenum: Invalid #+TODO: please use ... | ...";
+            while ($undone_keywords =~ /(\w+)/g) {
+                push @undone_keywords, $1;
+            }
+            while ($done_keywords =~ /(\w+)/g) {
+                push @done_keywords, $1;
+            }
+        }
     }
-    push @res, {type=>'text', content=>join("",@$curlines)} if @$curlines;
+    @undone_keywords = ("TODO") unless @undone_keywords;
+    @done_keywords   = ("DONE") unless @done_keywords;
+    my $undone_re = join("|", @undone_keywords); $undone_re= qr/(?:$undone_re)/;
+    my $done_re   = join("|", @done_keywords  ); $done_re  = qr/(?:$done_re)/;
 
-    # gather headlines + their content
+    # stage 2: build nodes
 
-    my $is_hl;
-    for my $line (@$lines) {
-        if ($line =~ /^(\*+) /) {
-            $is_hl = 1;
+    # a linear list of nodes
+    my @nodes = (
+        Org::Parser::Tiny::Node::Document->new(),
+    );
+
+    $linenum = 0;
+    while ($linenum < @$lines) {
+        my $line = $lines->[$linenum];
+        $linenum++;
+        if ($line =~ /^(\*+) (.*)/) {
+            #say "D: got headline $line";
             my $level = length($1);
-            push @res, {type=>'headline', headline=>$line, level=>$level,
-                        content=>""};
+            my $title = $2;
+            my $node = Org::Parser::Tiny::Node::Headline->new(
+                raw   => $line,
+                level => $level,
+            );
+
+            # extract todo state
+            if ($title =~ s/\s*($undone_re)\s+//) {
+                $node->{is_todo} = 1;
+                $node->{is_done} = 0;
+                $node->{todo_state} = $1;
+            } elsif ($title =~ s/\s*($done_re)\s+//) {
+                $node->{is_todo} = 1;
+                $node->{is_done} = 1;
+                $node->{todo_state} = $1;
+            } else {
+                $node->{is_todo} = 0;
+                $node->{is_done} = 0;
+                $node->{todo_state} = "";
+            }
+
+            # extract tags
+            if ($title =~ s/\s+:((?:\w+:)+)$//) {
+                my $tags = $1;
+                my @tags;
+                while ($tags =~ /(\w+)/g) {
+                    push @tags, $1;
+                }
+                $node->{tags} = \@tags;
+            }
+
+            $node->{title} = $title;
+
+            # find the first node which has the lower level (or the root node)
+            # as the parent node
+            my $i = $#nodes;
+            while ($i >= 0) {
+                if ($i == 0 || $nodes[$i]{level} < $level) {
+                    $node->{parent} = $nodes[$i];
+                    push @{ $nodes[$i]{children} }, $node;
+                    last;
+                }
+                $i--;
+            }
+            push @nodes, $node;
         } else {
-            $res[-1]{content} .= $line;
+            $nodes[-1]{preamble} .= $line;
         }
     }
 
-    \@res;
+    $nodes[0];
 }
 
 sub parse {
     my ($self, $arg, $opts) = @_;
     die "Please specify a defined argument to parse()\n" unless defined($arg);
 
-    $opts //= {};
+    $opts ||= {};
 
     my $lines;
     my $r = ref($arg);
@@ -72,7 +141,7 @@ sub parse {
 
 sub parse_file {
     my ($self, $filename, $opts) = @_;
-    $opts //= {};
+    $opts ||= {};
 
     my $content = do {
         open my($fh), "<", $filename or die "Can't open $filename: $!\n";
@@ -82,6 +151,60 @@ sub parse_file {
 
     $self->parse($content, $opts);
 }
+
+
+# abstract class: Org::Parser::Tiny::Node
+package Org::Parser::Tiny::Node;
+
+sub new {
+    my ($class, %args) = @_;
+    $args{children} //= [];
+    bless \%args, $class;
+}
+
+sub parent { $_[0]{parent} }
+sub children { $_[0]{children} || [] }
+sub as_string { $_[0]{raw} }
+
+
+# abstract class: Org::Parser::Tiny::HasPreamble
+package Org::Parser::Tiny::Node::HasPreamble;
+
+our @ISA = qw(Org::Parser::Tiny::Node);
+
+sub new {
+    my ($class, %args) = @_;
+    $args{preamble} //= "";
+    $class->SUPER::new(%args);
+}
+
+sub as_string {
+    $_[0]->{preamble} . join("", map { $_->as_string } @{ $_[0]->children });
+}
+
+
+# class: Org::Parser::Tiny::Document: top level node
+package Org::Parser::Tiny::Node::Document;
+
+our @ISA = qw(Org::Parser::Tiny::Node::HasPreamble);
+
+
+# class: Org::Parser::Tiny::Node::Headline: headline with its content
+package Org::Parser::Tiny::Node::Headline;
+
+our @ISA = qw(Org::Parser::Tiny::Node::HasPreamble);
+
+sub level { $_[0]{level} }
+
+sub title { $_[0]{title} }
+
+sub is_todo { $_[0]{is_todo} }
+
+sub is_done { $_[0]{is_done} }
+
+sub todo_state { $_[0]{todo_state} }
+
+sub tags { $_[0]{tags} || [] }
 
 1;
 # ABSTRACT: Parse Org documents with as little code (and no non-core deps) as possible
@@ -101,12 +224,45 @@ sub parse_file {
  ** this is yet another headline
  EOF
 
+Dump document structure using L<Tree::Dump>:
+
+ use Tree::Dump;
+ td($doc);
+
+Select document nodes using L<Data::CSel>:
+
+ use Data::CSel qw(csel);
+
+ # select headlines with "foo" in their title
+ my @nodes = csel(
+     {class_prefixes => ["Org::Parser::Tiny::Node"]},
+     "Headline[title =~ /foo/]"
+ );
+
+Manipulate tree nodes with path-like semantic using L<Tree::FSMethods>:
+
+ use Tree::FSMethods;
+ my $fs = Tree::FSMethods->new(
+     tree => $doc,
+     gen_filename_method => sub { $_[0]->can("title") ? $_[0]->title : "$_[0]" },
+ );
+
+ # list nodes right above the root node
+ my @nodes = $fs->ls("/");
+
+ # use wildcard to list nodes
+ my @nodes = $fs->ls("*foo*");
+
+ # remove top-level headlines which have "foo" in their title
+ $fs->rm($doc, "/*foo*");
+
 
 =head1 DESCRIPTION
 
 This module is a more lightweight alternative to L<Org:Parser>. Currently it is
-very simple and can only parse headlines. I use this to write utilities like
-L<sort-org-headlines-tiny>.
+very simple and only parses headlines; thus it is several times faster than
+Org::Parser. I use this to write utilities like L<sort-org-headlines-tiny> or to
+use it with L<Tree::FSMethods>.
 
 
 =head1 ATTRIBUTES
@@ -114,17 +270,29 @@ L<sort-org-headlines-tiny>.
 
 =head1 METHODS
 
-=head2 new()
+=head2 new
 
-Create a new parser instance.
+Usage:
 
-=head2 $orgp->parse($str | $arrayref | $coderef | $filehandle, \%opts) => $doc
+ my $orgp = Org::Parser::Tiny->new;
 
-Parse document (which can be contained in a scalar $str, an array of lines
-$arrayref, a subroutine which will be called for chunks until it returns undef,
-or a filehandle).
+Constructor. Create a new parser instance.
 
-Returns Perl structure representing the document.
+=head2 parse
+
+Usage:
+
+ my $doc = $orgp->parse($str | $arrayref | $coderef | $filehandle, \%opts);
+
+Parse document (which can be contained in a $str, an array of lines $arrayref, a
+$coderef which will be called for chunks until it returns undef, or a
+$filehandle.
+
+Returns a tree of node objects (of class C<Org::Parser::Tiny::Node> and its
+subclasses C<Org::Parser::Tiny::Node::Document> and
+C<Org::Parser::Tiny::Node::Headline>). The tree node complies to
+L<Role::TinyCommons::Tree::Node> role, so these tools are available:
+L<Data::CSel>, L<Tree::Dump>, L<Tree::FSMethods>, etc.
 
 Will die if there are syntax errors in documents.
 
@@ -134,13 +302,103 @@ Known options:
 
 =back
 
-=head2 $orgp->parse_file($filename, \%opts) => $doc
+=head2 parse_file
 
-Just like parse(), but will load document from file instead.
+Usage:
+
+ my $doc = $orgp->parse_file($filename, \%opts);
+
+Just like L</parse>, but will load document from file instead.
 
 Known options (aside from those known by parse()):
 
 =over
+
+=back
+
+
+=head1 NODE CLASSES
+
+=head2 Org::Parser::Tiny::Node
+
+Base class.
+
+Methods:
+
+=over
+
+=item * parent
+
+=item * children
+
+=item * as_string
+
+=back
+
+=head2 Org::Parser::Tiny::Node::Document
+
+Root node.
+
+Methods:
+
+=over
+
+=back
+
+=head2 Org::Parser::Tiny::Node::Headline
+
+Root node.
+
+Methods:
+
+=over
+
+=item * level
+
+Integer.
+
+=item * title
+
+Str.
+
+=item * is_todo
+
+Whether headline has a done or undone todo state. For example, the following
+headlines will have their is_todo() return true:
+
+ * TODO foo
+ * DONE bar
+
+=item * is_done
+
+Whether headline has a done todo state. For example, the following
+headlines will have their is_done() return true:
+
+ * DONE bar
+
+=item * todo_state
+
+Todo state or empty string. For example, this headline:
+
+ * TODO foo
+
+will have "TODO" as the todo_state, while:
+
+ * foo
+
+will have "".
+
+=item * tags
+
+Array of strings. For example, this headline:
+
+ * foo    :tag1:tag2:
+
+will have its C<tags()> return C<< ["tag1","tag2"] >>, while this headline:
+
+ * foo
+
+will have its C<tags()> return C<< [] >>.
 
 =back
 
@@ -150,6 +408,8 @@ Known options (aside from those known by parse()):
 
 =head1 SEE ALSO
 
-L<Org::Parser>
+L<Org::Parser>, the more fully featured Org parser.
+
+L<https://orgmode.org>
 
 =cut
