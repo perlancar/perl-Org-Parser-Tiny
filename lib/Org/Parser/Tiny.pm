@@ -194,17 +194,35 @@ package Org::Parser::Tiny::Node::Headline;
 
 our @ISA = qw(Org::Parser::Tiny::Node::HasPreamble);
 
-sub level { $_[0]{level} }
+sub level {
+    if (@_ > 1) { undef $_[0]{_str}; $_[0]{level} = $_[1] }
+    $_[0]{level};
+}
 
-sub title { $_[0]{title} }
+sub title {
+    if (@_ > 1) { undef $_[0]{_str}; $_[0]{title} = $_[1] }
+    $_[0]{title};
+}
 
-sub is_todo { $_[0]{is_todo} }
+sub is_todo {
+    if (@_ > 1) { undef $_[0]{_str}; $_[0]{is_todo} = $_[1] }
+    $_[0]{is_todo};
+}
 
-sub is_done { $_[0]{is_done} }
+sub is_done {
+    if (@_ > 1) { undef $_[0]{_str}; $_[0]{is_done} = $_[1] }
+    $_[0]{is_done};
+}
 
-sub todo_state { $_[0]{todo_state} }
+sub todo_state {
+    if (@_ > 1) { undef $_[0]{_str}; $_[0]{todo_state} = $_[1] }
+    $_[0]{todo_state};
+}
 
-sub tags { $_[0]{tags} || [] }
+sub tags {
+    if (@_ > 1) { undef $_[0]{_str}; $_[0]{tags} = $_[1] }
+    $_[0]{tags} || [];
+}
 
 sub as_string {
     ($_[0]->{_str} //
