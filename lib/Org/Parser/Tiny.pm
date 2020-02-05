@@ -239,22 +239,44 @@ Select document nodes using L<Data::CSel>:
      "Headline[title =~ /foo/]"
  );
 
-Manipulate tree nodes with path-like semantic using L<Tree::FSMethods>:
+Manipulate tree nodes with path-like semantic using L<Tree::FSMethods::Org>:
 
- use Tree::FSMethods;
- my $fs = Tree::FSMethods->new(
-     tree => $doc,
-     gen_filename_method => sub { $_[0]->can("title") ? $_[0]->title : "$_[0]" },
+Sample F<sample.org>:
+
+ some text before the first headline.
+
+ * header1                                                               :tag:
+ contains an internal link to another part of the document [[blah]]
+ * header2 [#A] [20%]
+ - contains priority and progress cookie (percent-style)
+ * header3 [1/10]
+ - contains progress cookie (fraction-style)
+ ** header3.1
+ ** header3.2
+ ** header3.3
+ * header4
+ blah blah.
+ * blah
+
+Using Tree::FSMethods::Org:
+
+ use Tree::FSMethods::Org;
+ my $fs = Tree::FSMethods::Org->new(
+     org_file => "sample.org",
  );
 
  # list nodes right above the root node
- my @nodes = $fs->ls("/");
+ my %nodes = $fs->ls; # (header1=>{...}, header2=>{...}, header3=>{...}, header4=>{})
 
- # use wildcard to list nodes
- my @nodes = $fs->ls("*foo*");
+ # list nodes below header3
+ $fs->cd("header3");
+ %nodes = $fs->ls; # ("header3.1"=>{...}, "header3.2"=>{...}, "header3.3"=>{...})
 
- # remove top-level headlines which have "foo" in their title
- $fs->rm($doc, "/*foo*");
+ # die, path not found
+ $fs->cd("/header5");
+
+ # remove top-level headlines which have "3"
+ $fs->rm("*3*");
 
 
 =head1 DESCRIPTION
@@ -410,6 +432,8 @@ will have its C<tags()> return C<< [] >>.
 
 L<Org::Parser>, the more fully featured Org parser.
 
-L<https://orgmode.org>
+L<https://orgmode.org>.
+
+L<Tree::FSMethods::Org> and L<Tree::FSMethods>.
 
 =cut
