@@ -165,7 +165,7 @@ sub new {
 sub parent { $_[0]{parent} }
 sub children { $_[0]{children} || [] }
 sub as_string { $_[0]{_str} }
-
+sub children_as_string { join("", map { $_->as_string } @{ $_[0]->children }) }
 
 # abstract class: Org::Parser::Tiny::HasPreamble
 package Org::Parser::Tiny::Node::HasPreamble;
@@ -185,7 +185,7 @@ package Org::Parser::Tiny::Node::Document;
 our @ISA = qw(Org::Parser::Tiny::Node::HasPreamble);
 
 sub as_string {
-    $_[0]->{preamble} . join("", map { $_->as_string } @{ $_[0]->children });
+    $_[0]->{preamble} . $_[0]->children_as_string;
 }
 
 
