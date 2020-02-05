@@ -207,7 +207,16 @@ sub todo_state { $_[0]{todo_state} }
 sub tags { $_[0]{tags} || [] }
 
 sub as_string {
-    ($_[0]->{_str} // '') . $_[0]->{preamble};
+    ($_[0]->{_str} //
+         join('',
+              "*" x $_[0]{level},
+              " ",
+              (length $_[0]{todo_state} ? "$_[0]{todo_state} " : ""),
+              "$_[0]{title}",
+              (defined $_[0]{tags} ? " :".join(":", @{ $_[0]{tags} }).":" : ""),
+              "\n",
+          )) .
+              $_[0]->{preamble};
 }
 
 1;
