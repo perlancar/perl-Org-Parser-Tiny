@@ -60,7 +60,7 @@ sub _parse {
             my $level = length($1);
             my $title = $2;
             my $node = Org::Parser::Tiny::Node::Headline->new(
-                raw   => $line,
+                _str  => $line,
                 level => $level,
             );
 
@@ -164,7 +164,7 @@ sub new {
 
 sub parent { $_[0]{parent} }
 sub children { $_[0]{children} || [] }
-sub as_string { $_[0]{raw} }
+sub as_string { $_[0]{_str} }
 
 
 # abstract class: Org::Parser::Tiny::HasPreamble
@@ -178,15 +178,15 @@ sub new {
     $class->SUPER::new(%args);
 }
 
-sub as_string {
-    $_[0]->{preamble} . join("", map { $_->as_string } @{ $_[0]->children });
-}
-
 
 # class: Org::Parser::Tiny::Document: top level node
 package Org::Parser::Tiny::Node::Document;
 
 our @ISA = qw(Org::Parser::Tiny::Node::HasPreamble);
+
+sub as_string {
+    $_[0]->{preamble} . join("", map { $_->as_string } @{ $_[0]->children });
+}
 
 
 # class: Org::Parser::Tiny::Node::Headline: headline with its content
@@ -205,6 +205,10 @@ sub is_done { $_[0]{is_done} }
 sub todo_state { $_[0]{todo_state} }
 
 sub tags { $_[0]{tags} || [] }
+
+sub as_string {
+    ($_[0]->{_str} // '') . $_[0]->{preamble};
+}
 
 1;
 # ABSTRACT: Parse Org documents with as little code (and no non-core deps) as possible
