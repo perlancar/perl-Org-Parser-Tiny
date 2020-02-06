@@ -162,9 +162,22 @@ sub new {
     bless \%args, $class;
 }
 
-sub parent { $_[0]{parent} }
-sub children { $_[0]{children} || [] }
+sub parent {
+    if (@_ > 1) {
+        $_[0]{parent} = $_[1];
+    }
+    $_[0]{parent};
+}
+
+sub children {
+    if (@_ > 1) {
+        $_[0]{children} = $_[1];
+    }
+    $_[0]{children} || [];
+}
+
 sub as_string { $_[0]{_str} }
+
 sub children_as_string { join("", map { $_->as_string } @{ $_[0]->children }) }
 
 # abstract class: Org::Parser::Tiny::HasPreamble
