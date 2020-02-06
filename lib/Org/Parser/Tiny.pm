@@ -224,7 +224,7 @@ sub tags {
     $_[0]{tags} || [];
 }
 
-sub as_string {
+sub headline_as_string {
     ($_[0]->{_str} //
          join('',
               "*" x $_[0]{level},
@@ -233,13 +233,19 @@ sub as_string {
               "$_[0]{title}",
               (defined $_[0]{tags} ? " :".join(":", @{ $_[0]{tags} }).":" : ""),
               "\n",
-          )) .
-              $_[0]->{preamble}
-              . $_[0]->children_as_string;
+          ));
+}
+
+sub as_string {
+    $_[0]->headline_as_string .
+        $_[0]->{preamble} .
+        $_[0]->children_as_string;
 }
 
 1;
 # ABSTRACT: Parse Org documents with as little code (and no non-core deps) as possible
+
+=for Pod::Coverage ^(.+)$
 
 =head1 SYNOPSIS
 
@@ -453,6 +459,10 @@ will have its C<tags()> return C<< ["tag1","tag2"] >>, while this headline:
  * foo
 
 will have its C<tags()> return C<< [] >>.
+
+=item * headline_as_string
+
+Headline line as string, without the preamble and children.
 
 =back
 
