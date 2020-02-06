@@ -234,7 +234,8 @@ sub as_string {
               (defined $_[0]{tags} ? " :".join(":", @{ $_[0]{tags} }).":" : ""),
               "\n",
           )) .
-              $_[0]->{preamble};
+              $_[0]->{preamble}
+              . $_[0]->children_as_string;
 }
 
 1;
