@@ -1,3 +1,12 @@
+0.004   2020-02-07  Released-By: PERLANCAR; Urgency: medium
+
+	- Headline: [bugfix] Fix as_string() once again.
+
+	- Nodes: Allow setting parent and children in parent() and chilren().
+
+	- Headline: add headline_as_string().
+
+
 0.003   2020-02-06  Released-By: PERLANCAR; Urgency: medium
 
 	- [internal] Use '_str' instead of 'raw' key to store raw string, to be
