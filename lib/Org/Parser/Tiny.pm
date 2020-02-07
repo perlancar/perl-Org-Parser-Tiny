@@ -237,7 +237,7 @@ sub tags {
     $_[0]{tags} || [];
 }
 
-sub headline_as_string {
+sub header_as_string {
     ($_[0]->{_str} //
          join('',
               "*" x $_[0]{level},
@@ -250,7 +250,7 @@ sub headline_as_string {
 }
 
 sub as_string {
-    $_[0]->headline_as_string .
+    $_[0]->header_as_string .
         $_[0]->{preamble} .
         $_[0]->children_as_string;
 }
@@ -473,9 +473,10 @@ will have its C<tags()> return C<< ["tag1","tag2"] >>, while this headline:
 
 will have its C<tags()> return C<< [] >>.
 
-=item * headline_as_string
+=item * header_as_string
 
-Headline line as string, without the preamble and children.
+First line of headline (the header) as string, without the preamble and
+children.
 
 =back
 
